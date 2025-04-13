@@ -44,7 +44,7 @@
 // benefit: analog mic inputs will be sampled contiously -> better response times and less "glitches"
 // WARNING: this option WILL lock-up your device in case that any other analogRead() operation is performed; 
 //          for example if you want to read "analog buttons"
-//#define I2S_GRAB_ADC1_COMPLETELY // (experimental) continously sample analog ADC microphone. WARNING will cause analogRead() lock-up
+//#define I2S_GRAB_ADC1_COMPLETELY // (experimental) continuously sample analog ADC microphone. WARNING will cause analogRead() lock-up
 
 // data type requested from the I2S driver - currently we always use 32bit
 //#define I2S_USE_16BIT_SAMPLES   // (experimental) define this to request 16bit - more efficient but possibly less compatible
@@ -71,7 +71,7 @@
  * if you want to receive two channels, one is the actual data from microphone and another channel is suppose to receive 0, it's different data in two channels, you need to choose I2S_CHANNEL_FMT_RIGHT_LEFT in this case.
 */
 
-#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)) && (ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 4, 4))
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)) && (ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 4, 6))
 // espressif bug: only_left has no sound, left and right are swapped 
 // https://github.com/espressif/esp-idf/issues/9635  I2S mic not working since 4.4 (IDFGH-8138)
 // https://github.com/espressif/esp-idf/issues/8538  I2S channel selection issue? (IDFGH-6918)
@@ -122,7 +122,7 @@ class AudioSource {
        This function needs to take care of anything that needs to be done
        before samples can be obtained from the microphone.
     */
-    virtual void initialize(int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) = 0;
+    virtual void initialize(int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) = 0;
 
     /* Deinitialize
        Release all resources and deactivate any functionality that is used
@@ -191,10 +191,11 @@ class I2SSource : public AudioSource {
       };
     }
 
-    virtual void initialize(int8_t i2swsPin = I2S_PIN_NO_CHANGE, int8_t i2ssdPin = I2S_PIN_NO_CHANGE, int8_t i2sckPin = I2S_PIN_NO_CHANGE, int8_t mclkPin = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) {
+    virtual void initialize(int8_t i2swsPin = I2S_PIN_NO_CHANGE, int8_t i2ssdPin = I2S_PIN_NO_CHANGE, int8_t i2sckPin = I2S_PIN_NO_CHANGE, int8_t mclkPin = I2S_PIN_NO_CHANGE) {
+      DEBUGSR_PRINTLN(F("I2SSource:: initialize()."));
       if (i2swsPin != I2S_PIN_NO_CHANGE && i2ssdPin != I2S_PIN_NO_CHANGE) {
-        if (!pinManager.allocatePin(i2swsPin, true, PinOwner::UM_Audioreactive) ||
-            !pinManager.allocatePin(i2ssdPin, false, PinOwner::UM_Audioreactive)) { // #206
+        if (!PinManager::allocatePin(i2swsPin, true, PinOwner::UM_Audioreactive) ||
+            !PinManager::allocatePin(i2ssdPin, false, PinOwner::UM_Audioreactive)) { // #206
           DEBUGSR_PRINTF("\nAR: Failed to allocate I2S pins: ws=%d, sd=%d\n",  i2swsPin, i2ssdPin); 
           return;
         }
@@ -202,7 +203,7 @@ class I2SSource : public AudioSource {
 
       // i2ssckPin needs special treatment, since it might be unused on PDM mics
       if (i2sckPin != I2S_PIN_NO_CHANGE) {
-        if (!pinManager.allocatePin(i2sckPin, true, PinOwner::UM_Audioreactive)) {
+        if (!PinManager::allocatePin(i2sckPin, true, PinOwner::UM_Audioreactive)) {
           DEBUGSR_PRINTF("\nAR: Failed to allocate I2S pins: sck=%d\n",  i2sckPin); 
           return;
         }
@@ -248,7 +249,7 @@ class I2SSource : public AudioSource {
       // Reserve the master clock pin if provided
       _mclkPin = mclkPin;
       if (mclkPin != I2S_PIN_NO_CHANGE) {
-        if(!pinManager.allocatePin(mclkPin, true, PinOwner::UM_Audioreactive)) { 
+        if(!PinManager::allocatePin(mclkPin, true, PinOwner::UM_Audioreactive)) { 
           DEBUGSR_PRINTF("\nAR: Failed to allocate I2S pin: MCLK=%d\n",  mclkPin); 
           return;
         } else
@@ -306,11 +307,11 @@ class I2SSource : public AudioSource {
         DEBUGSR_PRINTF("Failed to uninstall i2s driver: %d\n", err);
         return;
       }
-      if (_pinConfig.ws_io_num   != I2S_PIN_NO_CHANGE) pinManager.deallocatePin(_pinConfig.ws_io_num,   PinOwner::UM_Audioreactive);
-      if (_pinConfig.data_in_num != I2S_PIN_NO_CHANGE) pinManager.deallocatePin(_pinConfig.data_in_num, PinOwner::UM_Audioreactive);
-      if (_pinConfig.bck_io_num  != I2S_PIN_NO_CHANGE) pinManager.deallocatePin(_pinConfig.bck_io_num,  PinOwner::UM_Audioreactive);
+      if (_pinConfig.ws_io_num   != I2S_PIN_NO_CHANGE) PinManager::deallocatePin(_pinConfig.ws_io_num,   PinOwner::UM_Audioreactive);
+      if (_pinConfig.data_in_num != I2S_PIN_NO_CHANGE) PinManager::deallocatePin(_pinConfig.data_in_num, PinOwner::UM_Audioreactive);
+      if (_pinConfig.bck_io_num  != I2S_PIN_NO_CHANGE) PinManager::deallocatePin(_pinConfig.bck_io_num,  PinOwner::UM_Audioreactive);
       // Release the master clock pin
-      if (_mclkPin != I2S_PIN_NO_CHANGE) pinManager.deallocatePin(_mclkPin, PinOwner::UM_Audioreactive);
+      if (_mclkPin != I2S_PIN_NO_CHANGE) PinManager::deallocatePin(_mclkPin, PinOwner::UM_Audioreactive);
     }
 
     virtual void getSamples(float *buffer, uint16_t num_samples) {
@@ -377,7 +378,7 @@ class I2SSource : public AudioSource {
 };
 
 /* ES7243 Microphone
-   This is an I2S microphone that requires ininitialization over
+   This is an I2S microphone that requires initialization over
    I2C before I2S data can be received
 */
 class ES7243 : public I2SSource {
@@ -412,6 +413,7 @@ public:
     };
 
     void initialize(int8_t i2swsPin, int8_t i2ssdPin, int8_t i2sckPin, int8_t mclkPin) {
+      DEBUGSR_PRINTLN(F("ES7243:: initialize();"));
       if ((i2sckPin < 0) || (mclkPin < 0)) {
         DEBUGSR_PRINTF("\nAR: invalid I2S pin: SCK=%d, MCLK=%d\n", i2sckPin, mclkPin); 
         return;
@@ -427,8 +429,8 @@ public:
     }
 };
 
-/* ES8388 Sound Modude
-   This is an I2S sound processing unit that requires ininitialization over
+/* ES8388 Sound Module
+   This is an I2S sound processing unit that requires initialization over
    I2C before I2S data can be received. 
 */
 class ES8388Source : public I2SSource {
@@ -473,7 +475,7 @@ class ES8388Source : public I2SSource {
       // The mics *and* line-in are BOTH connected to LIN2/RIN2 on the AudioKit
       // so there's no way to completely eliminate the mics. It's also hella noisy. 
       // Line-in works OK on the AudioKit, generally speaking, as the mics really need
-      // amplification to be noticable in a quiet room. If you're in a very loud room, 
+      // amplification to be noticeable in a quiet room. If you're in a very loud room, 
       // the mics on the AudioKit WILL pick up sound even in line-in mode. 
       // TL;DR: Don't use the AudioKit for anything, use the LyraT. 
       //
@@ -527,7 +529,7 @@ class ES8388Source : public I2SSource {
     };
 
     void initialize(int8_t i2swsPin, int8_t i2ssdPin, int8_t i2sckPin, int8_t mclkPin) {
-
+      DEBUGSR_PRINTLN(F("ES8388Source:: initialize();"));
       if ((i2sckPin < 0) || (mclkPin < 0)) {
         DEBUGSR_PRINTF("\nAR: invalid I2S pin: SCK=%d, MCLK=%d\n", i2sckPin, mclkPin); 
         return;
@@ -584,9 +586,10 @@ class I2SAdcSource : public I2SSource {
     /* identify Audiosource type - I2S-ADC*/
     AudioSourceType getType(void) {return(Type_I2SAdc);}
 
-    void initialize(int8_t audioPin, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) {
+    void initialize(int8_t audioPin, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) {
+      DEBUGSR_PRINTLN(F("I2SAdcSource:: initialize()."));
       _myADCchannel = 0x0F;
-      if(!pinManager.allocatePin(audioPin, false, PinOwner::UM_Audioreactive)) {
+      if(!PinManager::allocatePin(audioPin, false, PinOwner::UM_Audioreactive)) {
          DEBUGSR_PRINTF("failed to allocate GPIO for audio analog input: %d\n", audioPin);
         return;
       }
@@ -714,7 +717,7 @@ class I2SAdcSource : public I2SSource {
     }
 
     void deinitialize() {
-      pinManager.deallocatePin(_audioPin, PinOwner::UM_Audioreactive);
+      PinManager::deallocatePin(_audioPin, PinOwner::UM_Audioreactive);
       _initialized = false;
       _myADCchannel = 0x0F;
       
@@ -755,7 +758,8 @@ class SPH0654 : public I2SSource {
       I2SSource(sampleRate, blockSize, sampleScale)
     {}
 
-    void initialize(uint8_t i2swsPin, uint8_t i2ssdPin, uint8_t i2sckPin, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE, int8_t = I2S_PIN_NO_CHANGE) {
+    void initialize(int8_t i2swsPin, int8_t i2ssdPin, int8_t i2sckPin, int8_t = I2S_PIN_NO_CHANGE) {
+      DEBUGSR_PRINTLN(F("SPH0654:: initialize();"));
       I2SSource::initialize(i2swsPin, i2ssdPin, i2sckPin);
 #if !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32S3)
 // these registers are only existing in "classic" ESP32
